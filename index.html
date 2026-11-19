@@ -79,6 +79,19 @@ canvas{width:100%;height:220px;display:block}
 .eq .eqi{width:32px;text-align:center;font-size:18px}
 .eqbtn{margin-top:6px;padding:6px 0;font-size:14px;color:var(--acc)}
 .eqbig{width:100%;max-height:45vh;object-fit:contain;border-radius:12px;background:#000;margin-bottom:10px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;margin-bottom:4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips.wrap{flex-wrap:wrap;overflow:visible}
+.chip{flex:none;background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:14px}
+.chip.on{background:var(--acc2);border-color:var(--acc2);color:#fff}
+.gbar{display:grid;grid-template-columns:72px 1fr 28px;gap:8px;align-items:center;padding:5px 0;cursor:pointer}
+.gbar .gl{font-size:14px}.gbar b{text-align:right;font-size:14px}
+.gbar .gt{height:10px;background:var(--card2);border-radius:99px;overflow:hidden}
+.gbar .gt i{display:block;height:100%;border-radius:99px}
+.gex{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.gex:last-child{border-bottom:0}
+.gex .lvl{text-align:right;flex:none}.gex .lvl b{display:block;font-size:16px}.gex .lvl span{font-size:12px;color:var(--mut)}
+.gtag{display:inline-block;background:var(--card2);border-radius:6px;padding:1px 7px;margin-right:4px;color:var(--txt)}
 .empty{text-align:center;color:var(--mut);padding:30px 10px}
 </style>
 </head>
@@ -106,7 +119,7 @@ const DEFAULT_EX = ['Присідання зі штангою','Жим лежа�
 const TITLES = {workout:'Тренування',history:'Історія',progress:'Прогрес',weight:'Вага і талія',more:'Ще'};
 
 let S, storageOk = true;
-const ui = {tab:'workout', wid:null, pex:null, metric:'e1rm'};
+const ui = {tab:'workout', wid:null, pex:null, metric:'e1rm', pmode:'groups', pg:null, pickG:'all', pendingEx:null};
 
 /* ---------- storage ---------- */
 function load(){
@@ -120,6 +133,7 @@ function normalize(){
   if(!Array.isArray(S.weights)) S.weights = [];
   if(!Array.isArray(S.waists)) S.waists = [];
   if(!S.photos || typeof S.photos !== 'object') S.photos = {};
+  if(!S.groups || typeof S.groups !== 'object') S.groups = {};
   if(!Array.isArray(S.exercises)) S.exercises = DEFAULT_EX.slice();
   if(typeof S.goal !== 'number') S.goal = 85;
   if(!('lastBackup' in S)) S.lastBackup = null;
@@ -227,7 +241,7 @@ function vWorkoutEdit(w){
     const prev = lastSession(e.name, w);
     h += `<section class="card"><div class="exhead"><b>${esc(e.name)}</b>
       <span>${i>0?`<button class="ghost sm" data-act="exup" data-i="${i}" aria-label="Вгору">↑</button>`:''}<button class="ghost sm" data-act="exdel" data-i="${i}" aria-label="Видалити">✕</button></span></div>
-      <div class="muted small">${prev ? `Минулого разу (${fmtShort(prev.date)}): ${prev.sets.map(fmtSet).join(', ')}` : 'Вперше — запиши стартову точку'}</div>
+      <div class="muted small"><span class="gtag">${GNAME[groupOf(e.name)]}</span> ${prev ? `Минулого разу (${fmtShort(prev.date)}): ${prev.sets.map(fmtSet).join(', ')}` : 'Вперше — запиши стартову точку'}</div>
       ${eqRow(e, i)}
       <div class="sets"><div class="sethdr"><span></span><span>кг</span><span>повтори</span><span></span></div>
       ${e.sets.map((s,j) => `<div class="set"><span class="n">${j+1}</span>
@@ -298,6 +312,10 @@ function usedExercises(){
 }
 const METRICS = {e1rm:'1ПМ (оцінка)', maxW:'Макс. вага', vol:"Тоннаж", reps:'Макс. повтори'};
 function vProgress(){
+  const seg = `<div class="seg" style="margin-top:0"><button data-act="pmode" data-m="groups" class="${ui.pmode==='groups'?'on':''}">По групах м'язів</button><button data-act="pmode" data-m="ex" class="${ui.pmode==='ex'?'on':''}">По вправі</button></div>`;
+  return seg + (ui.pmode === 'groups' ? vGroups() : vProgressEx());
+}
+function vProgressEx(){
   const ex = usedExercises();
   if(!ex.length) return `<div class="empty">Графіки з'являться, коли запишеш хоча б одне тренування з підходами.</div>`;
   if(!ui.pex || !ex.includes(ui.pex)) ui.pex = ex[0];
@@ -486,8 +504,10 @@ function vMore(){
   <section class="card"><h2>🎯 Ціль ваги</h2><div class="row"><input class="grow" type="number" inputmode="decimal" step="0.5" data-in="goal" value="${S.goal}" style="margin:0"><span class="muted">кг</span></div></section>
 
   <section class="card"><h2>📋 Мої вправи</h2>
-    <div class="row"><input class="grow" id="newEx" placeholder="Назва нової вправи" style="margin:0"><button class="pri" data-act="exnew">Додати</button></div>
-    <ul class="list" style="margin-top:8px">${custom.slice().sort((a,b)=>a.localeCompare(b,'uk')).map(n => `<li><span>${esc(n)}</span><button class="ghost sm" data-act="exremove" data-n="${esc(n)}" aria-label="Прибрати">✕</button></li>`).join('')}</ul>
+    <input id="newEx" placeholder="Назва нової вправи" style="margin:0">
+    <div class="row" style="margin-top:8px">${groupSelect('chest','id="newExG" class="grow" style="margin:0;flex:1"')}<button class="pri" data-act="exnew">Додати</button></div>
+    <div class="muted small" style="margin-top:10px">Групу кожної вправи можна змінити тут:</div>
+    <ul class="list" style="margin-top:4px">${allExercises().sort((a,b)=>groupOf(a).localeCompare(groupOf(b)) || a.localeCompare(b,'uk')).map(n => `<li><span class="grow">${esc(n)}</span>${groupSelect(groupOf(n), `data-in="exg" data-n="${esc(n)}" style="width:auto;margin:0;padding:6px 8px;font-size:14px"`)}${custom.includes(n) ? `<button class="ghost sm" data-act="exremove" data-n="${esc(n)}" aria-label="Прибрати">✕</button>` : '<span style="width:38px"></span>'}</li>`).join('')}</ul>
     <div class="muted small">Прибирання вправи зі списку не видаляє її з уже записаних тренувань.</div></section>
 
   <section class="card"><h2>ℹ️ Як не втратити дані</h2><div class="small muted">
@@ -521,10 +541,81 @@ function doImport(text){
   S = d; normalize(); save(true); ui.wid = null; ui.tab = 'workout'; render(); toast('Дані відновлено');
 }
 
+/* ---------- muscle groups ---------- */
+const GROUPS = [['chest','Груди'],['back','Спина'],['shoulders','Плечі'],['biceps','Біцепс'],['triceps','Трицепс'],['legs','Ноги'],['abs','Прес'],['other','Інше']];
+const GNAME = Object.fromEntries(GROUPS);
+const DEFAULT_GROUPS = {
+  'Присідання зі штангою':'legs','Жим лежачи':'chest','Станова тяга':'back','Румунська тяга':'legs','Жим стоячи (армійський)':'shoulders',
+  'Тяга штанги в нахилі':'back','Підтягування':'back','Віджимання на брусах':'chest','Тяга верхнього блоку':'back','Тяга нижнього блоку сидячи':'back',
+  'Жим гантелей на похилій лаві':'chest','Жим ногами':'legs','Випади з гантелями':'legs','Болгарські присідання':'legs','Розгинання ніг у тренажері':'legs',
+  'Згинання ніг у тренажері':'legs','Підйоми на носки':'legs','Махи гантелями в сторони':'shoulders','Тяга до обличчя (face pull)':'shoulders',
+  'Підйом штанги на біцепс':'biceps','Молотки з гантелями':'biceps','Французький жим':'triceps','Розгинання рук на блоці':'triceps','Планка':'abs','Скручування на блоці':'abs'
+};
+function groupOf(n){ return S.groups[n] || DEFAULT_GROUPS[n] || guessGroup(n) || 'other'; }
+function guessGroup(n){
+  const s = n.toLowerCase();
+  const rules = [
+    ['triceps', /трицеп|француз|розгинання рук|брус.*трицеп|відведення.*назад/],
+    ['biceps', /біцеп|молот|згинання рук|scott|скотт/],
+    ['abs', /прес|скруч|планк|підйом ніг|ролик/],
+    ['shoulders', /плеч|мах|дельт|армійськ|жим стоячи|жим сидячи|арнольд|face pull|тяга до обличчя|шраг/],
+    ['chest', /груд|жим леж|жим гантел|похил|кросовер|зведення|пек|батерфля|віджим/],
+    ['back', /спин|тяга|підтяг|пулover|пуловер|гіперекст/],
+    ['legs', /ног|присід|випад|стегн|сідни|носк|литк|ікр|гак|сумо|ягод/]
+  ];
+  for(const [g, re] of rules) if(re.test(s)) return g;
+  return null;
+}
+function allExercises(){ return Array.from(new Set([...S.exercises, ...Object.keys(usageOrder())])); }
+function groupSelect(cur, attrs){
+  return `<select ${attrs}>${GROUPS.map(([k,v]) => `<option value="${k}" ${k===cur?'selected':''}>${v}</option>`).join('')}</select>`;
+}
+function weeklySets(){
+  const from = toTs(todayStr()) - 6*864e5, c = {};
+  GROUPS.forEach(([k]) => c[k] = 0);
+  S.workouts.forEach(w => { if(toTs(w.date) < from) return; w.exercises.forEach(e => { c[groupOf(e.name)] += e.sets.filter(validSet).length; }); });
+  return c;
+}
+function exLevel(n){
+  const ss = exSessions(n); if(!ss.length) return null;
+  const last = ss[ss.length-1], prev = ss[ss.length-2];
+  const bw = last.e1rm == null;
+  const key = bw ? 'reps' : 'e1rm';
+  const val = last[key], pv = prev ? prev[key] : null;
+  const best = Math.max(...ss.map(s => s[key]).filter(v => v != null));
+  const top = last.sets.slice().sort((a,b) => bw ? b.r - a.r : e1rm(b) - e1rm(a))[0];
+  return {ss, last, bw, val, trend: pv == null ? 0 : val > pv * 1.005 ? 1 : val < pv * 0.995 ? -1 : 0, best, isPR: ss.length > 1 && val >= best, top};
+}
+function vGroups(){
+  const ws = weeklySets();
+  const main = GROUPS.filter(([k]) => k !== 'other' || ws.other > 0);
+  const mx = Math.max(20, ...Object.values(ws));
+  let h = `<section class="card"><h2>Баланс за 7 днів</h2>
+    ${main.map(([k,v]) => { const n = ws[k]; const col = n === 0 ? 'var(--line)' : n < 10 ? 'var(--warn)' : n <= 20 ? 'var(--ok)' : 'var(--acc)';
+      return `<div class="gbar" data-act="pg" data-g="${k}"><span class="gl">${v}</span><span class="gt"><i style="width:${Math.max(n ? 4 : 0, n / mx * 100)}%;background:${col}"></i></span><b>${n}</b></div>`; }).join('')}
+    <div class="muted small" style="margin-top:8px">Робочі підходи на групу за тиждень. Для росту м'язів орієнтир — приблизно <b style="color:var(--ok)">10–20</b>. <span style="color:var(--warn)">Жовте</span> — менше 10, варто додати.</div></section>`;
+  const g = ui.pg || 'chest';
+  h += `<div class="chips">${GROUPS.map(([k,v]) => `<button class="chip ${k===g?'on':''}" data-act="pg" data-g="${k}">${v}</button>`).join('')}</div>`;
+  const list = allExercises().filter(n => groupOf(n) === g);
+  const last = usageOrder();
+  list.sort((a,b) => (last[b]||'').localeCompare(last[a]||'') || a.localeCompare(b,'uk'));
+  if(!list.length) return h + `<div class="empty">У групі «${GNAME[g]}» поки немає вправ.<br>Додай нову під час тренування або в «Ще → Мої вправи».</div>`;
+  h += `<section class="card">` + list.map(n => {
+    const L = exLevel(n);
+    if(!L) return `<div class="gex"><div class="grow"><b>${esc(n)}</b><div class="muted small">ще не робив</div></div></div>`;
+    const arrow = L.trend > 0 ? '<span class="up">▲</span>' : L.trend < 0 ? '<span class="down">▼</span>' : '<span class="muted">●</span>';
+    return `<div class="gex" data-act="gopen" data-n="${esc(n)}"><div class="grow"><b>${esc(n)}</b>
+      <div class="muted small">${fmtShort(L.last.date)} · ${L.last.sets.map(fmtSet).join(', ')}</div></div>
+      <div class="lvl"><b>${L.bw ? L.val + ' повт.' : '≈' + fmtNum(L.val) + ' кг'} ${arrow}</b><span>${L.isPR ? '🏆 рекорд' : (L.bw ? 'рекорд ' + L.best : '1ПМ · рекорд ' + fmtNum(L.best))}</span></div></div>`;
+  }).join('') + `</section>
+  <div class="muted small" style="padding:0 4px">▲/▼ — порівняння з попереднім тренуванням цієї вправи. «≈ кг» — розрахунковий максимум на 1 повтор: так можна порівнювати 80×8 і 85×5. Натисни на вправу — відкриється графік.</div>`;
+  return h;
+}
+
 /* ---------- exercise picker ---------- */
 function openPicker(){
   const sh = $('#sheet');
-  sh.innerHTML = `<div class="panel"><div class="row"><input class="grow" id="pq" placeholder="Пошук або нова вправа…" autocomplete="off" style="margin:0"><button class="ghost" data-act="pclose">Закрити</button></div><div class="opts" id="popts"></div></div>`;
+  sh.innerHTML = `<div class="panel"><div class="row"><input class="grow" id="pq" placeholder="Пошук або нова вправа…" autocomplete="off" style="margin:0"><button class="ghost" data-act="pclose">Закрити</button></div><div class="chips" id="pchips"></div><div class="opts" id="popts"></div></div>`;
   sh.classList.remove('hidden');
   fillPicker('');
   const q = $('#pq'); q.addEventListener('input', () => fillPicker(q.value));
@@ -535,11 +626,13 @@ function fillPicker(q){
   const last = usageOrder();
   const all = Array.from(new Set([...S.exercises, ...Object.keys(last)]));
   const qq = q.trim().toLowerCase();
-  let list = all.filter(n => !qq || n.toLowerCase().includes(qq));
+  const g = ui.pickG;
+  $('#pchips').innerHTML = [['all','Усі'], ...GROUPS].map(([k,v]) => `<button class="chip ${k===g?'on':''}" data-act="pickg" data-g="${k}">${v}</button>`).join('');
+  let list = all.filter(n => (!qq || n.toLowerCase().includes(qq)) && (g === 'all' || groupOf(n) === g));
   list.sort((a,b) => (last[b]||'').localeCompare(last[a]||'') || a.localeCompare(b,'uk'));
   let h = '';
-  if(qq && !all.some(n => n.toLowerCase() === qq)) h += `<button class="opt add" data-act="pick" data-n="${esc(q.trim())}">+ Нова вправа: «${esc(q.trim())}»</button>`;
-  h += list.map(n => `<button class="opt" data-act="pick" data-n="${esc(n)}">${esc(n)}${inW.has(n) ? ' <span class="muted small">· вже додано</span>' : last[n] ? ' <span class="muted small">· нещодавно</span>' : ''}</button>`).join('');
+  if(qq && !all.some(n => n.toLowerCase() === qq)) h += `<button class="opt add" data-act="pick" data-n="${esc(q.trim())}">+ Нова вправа: «${esc(q.trim())}»${g !== 'all' ? ' → ' + GNAME[g] : ''}</button>`;
+  h += list.map(n => `<button class="opt" data-act="pick" data-n="${esc(n)}">${esc(n)} <span class="muted small">· ${GNAME[groupOf(n)]}${inW.has(n) ? ' · вже додано' : ''}</span></button>`).join('');
   $('#popts').innerHTML = h || '<div class="empty">Нічого не знайдено</div>';
 }
 function closePicker(){ eqDraft = null; const sh = $('#sheet'); sh.classList.add('hidden'); sh.innerHTML = ''; }
@@ -598,6 +691,14 @@ document.addEventListener('click', e => {
     case 'pclose': closePicker(); break;
     case 'pick': {
       const n = b.dataset.n; if(!w || !n) break;
+      const isNew = !allExercises().includes(n);
+      if(isNew && ui.pickG !== 'all') S.groups[n] = ui.pickG;
+      if(isNew && ui.pickG === 'all'){
+        const guess = guessGroup(n);
+        $('#popts').innerHTML = `<div style="padding:10px 4px"><b>${esc(n)}</b><div class="muted small" style="margin:4px 0 10px">На яку групу м'язів ця вправа?</div>
+          <div class="chips wrap">${GROUPS.map(([k,v]) => `<button class="chip ${k===guess?'on':''}" data-act="pickas" data-g="${k}" data-n="${esc(n)}">${v}</button>`).join('')}</div></div>`;
+        break;
+      }
       if(!S.exercises.includes(n)) S.exercises.push(n);
       const prev = lastSession(n, w);
       const peq = lastEq(n, w);
@@ -614,6 +715,11 @@ document.addEventListener('click', e => {
     case 'setadd': if(w){ const ss = w.exercises[i].sets, l = ss[ss.length-1]; ss.push(l ? {w:l.w, r:l.r} : {w:null, r:null}); save(true); render(); const inp = document.querySelector(`input[data-in="r"][data-i="${i}"][data-j="${ss.length-1}"]`); if(inp){ inp.focus(); inp.select && inp.select(); } } break;
     case 'setdel': if(w){ w.exercises[i].sets.splice(j,1); if(!w.exercises[i].sets.length) w.exercises[i].sets.push({w:null,r:null}); save(true); render(); } break;
     case 'metric': ui.metric = b.dataset.m; render(); break;
+    case 'pmode': ui.pmode = b.dataset.m; render(); break;
+    case 'pg': ui.pg = b.dataset.g; ui.pmode = 'groups'; render(); { const c = document.querySelector('.chips'); if(c) c.scrollIntoView({block:'start'}); } break;
+    case 'gopen': ui.pex = b.dataset.n; ui.pmode = 'ex'; ui.metric = 'e1rm'; render(); window.scrollTo(0,0); break;
+    case 'pickg': ui.pickG = b.dataset.g; fillPicker($('#pq').value); break;
+    case 'pickas': { S.groups[b.dataset.n] = b.dataset.g; ui.pickG = b.dataset.g; const fake = document.createElement('button'); fake.dataset.act = 'pick'; fake.dataset.n = b.dataset.n; fake.style.display = 'none'; document.body.appendChild(fake); fake.click(); fake.remove(); break; }
     case 'wsave': {
       const kg = num($('#wKg').value), cm = num($('#wCm').value), d = $('#wDate').value || todayStr();
       const okKg = kg != null && kg >= 20 && kg <= 400, okCm = cm != null && cm >= 40 && cm <= 250;
@@ -639,7 +745,7 @@ document.addEventListener('click', e => {
     }
     case 'copytext': { const t = $('#bkText'); t.select(); let ok = false; try { ok = document.execCommand('copy'); } catch(_){} if(!ok && navigator.clipboard) navigator.clipboard.writeText(t.value).then(() => toast('Скопійовано'), () => toast('Виділи текст і скопіюй вручну')); else toast(ok ? 'Скопійовано' : 'Виділи текст і скопіюй вручну'); break; }
     case 'importtext': doImport($('#bkText').value); break;
-    case 'exnew': { const n = $('#newEx').value.trim(); if(n && !S.exercises.includes(n)){ S.exercises.push(n); save(true); render(); toast('Додано'); } break; }
+    case 'exnew': { const n = $('#newEx').value.trim(); if(n && !S.exercises.includes(n)){ S.exercises.push(n); S.groups[n] = $('#newExG').value; save(true); render(); toast('Додано'); } break; }
     case 'exremove': S.exercises = S.exercises.filter(x => x !== b.dataset.n); save(true); render(); break;
     case 'wipe': if(confirm('Точно видалити ВСІ тренування, зважування, заміри і фото?') && confirm('Останнє попередження: це не можна скасувати. Видалити?')){ S = null; normalize(); save(true); ui.wid = null; render(); toast('Усе видалено'); } break;
   }
@@ -662,6 +768,7 @@ document.addEventListener('change', e => {
   const w = S.workouts.find(x => x.id === ui.wid);
   if(k === 'wdate' && w && el.value){ w.date = el.value; save(true); render(); }
   if(k === 'pex'){ ui.pex = el.value; render(); }
+  if(k === 'exg'){ S.groups[el.dataset.n] = el.value; save(true); toast('Групу змінено'); }
 });
 $('#importFile').addEventListener('change', e => {
   const f = e.target.files[0]; if(!f) return;
