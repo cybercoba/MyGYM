@@ -17,8 +17,22 @@ html,body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.4 system-ui
 header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(12px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line)}
 header h1{margin:0;font-size:20px;font-weight:700}
 main{padding:12px 12px calc(90px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
-nav{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;background:#151a20;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-nav button{flex:1;background:none;border:0;color:var(--mut);padding:9px 2px 8px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px}
+#foot{position:fixed;left:0;right:0;bottom:0;z-index:6;background:#151a20;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav{display:flex}
+.mini{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--line);background:#1b2129}
+.mini.hidden{display:none}
+.mini .mname{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;cursor:pointer;padding-left:6px}
+.mini button{background:var(--card2);color:var(--txt);padding:7px 11px;font-size:15px}
+body.has-mini main{padding-bottom:calc(140px + env(safe-area-inset-bottom))}
+.mnow{font-weight:600;text-align:center;margin-bottom:8px;word-break:break-word}
+#mseek{padding:0;margin:6px 0 2px;accent-color:var(--acc);background:none;border:0}
+.mctl{display:flex;justify-content:center;align-items:center;gap:10px;margin:12px 0 8px}
+.mt{font-size:20px;padding:10px 12px;opacity:.55}.mt.sec{opacity:1}.mt.onc{opacity:1}
+.mbig{font-size:26px;width:64px;height:64px;border-radius:50%;padding:0}
+.list li.mcur{color:var(--acc)}
+.chip.addc{color:var(--acc);border-style:dashed}
+.sublist{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
+nav button{flex:1;min-width:0;background:none;border:0;color:var(--mut);padding:9px 0 8px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px}
 nav button .i{font-size:20px;line-height:1}
 nav button.on{color:var(--acc)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
@@ -84,7 +98,7 @@ canvas{width:100%;height:220px;display:block}
 .chips.wrap{flex-wrap:wrap;overflow:visible}
 .chip{flex:none;background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:14px}
 .chip.on{background:var(--acc2);border-color:var(--acc2);color:#fff}
-.gbar{display:grid;grid-template-columns:72px 1fr 28px;gap:8px;align-items:center;padding:5px 0;cursor:pointer}
+.gbar{display:grid;grid-template-columns:minmax(88px,max-content) 1fr 30px;gap:8px;align-items:center;padding:5px 0;cursor:pointer}
 .gbar .gl{font-size:14px}.gbar b{text-align:right;font-size:14px}
 .gbar .gt{height:10px;background:var(--card2);border-radius:99px;overflow:hidden}
 .gbar .gt i{display:block;height:100%;border-radius:99px}
@@ -98,13 +112,17 @@ canvas{width:100%;height:220px;display:block}
 <body>
 <header><h1 id="title">Тренування</h1></header>
 <main id="view"></main>
+<footer id="foot"><div id="mini" class="mini hidden"><span class="mname" data-act="gomusic"></span><button data-act="mprev" aria-label="Попередній">⏮</button><button data-act="mplay" aria-label="Грати/пауза">▶</button><button data-act="mnext" aria-label="Наступний">⏭</button></div>
 <nav id="tabs">
-  <button data-tab="workout" class="on"><span class="i">🏋️</span>Тренування</button>
+  <button data-tab="workout" class="on"><span class="i">🏋️</span>Зал</button>
   <button data-tab="history"><span class="i">📅</span>Історія</button>
   <button data-tab="progress"><span class="i">📈</span>Прогрес</button>
   <button data-tab="weight"><span class="i">⚖️</span>Тіло</button>
+  <button data-tab="music"><span class="i">🎵</span>Музика</button>
   <button data-tab="more"><span class="i">⚙️</span>Ще</button>
-</nav>
+</nav></footer>
+<audio id="audio" preload="auto"></audio>
+<input type="file" id="musicFile" accept="audio/*" multiple hidden>
 <div id="sheet" class="sheet hidden"></div>
 <div id="toast" class="toast"></div>
 <input type="file" id="importFile" accept=".json,application/json,text/plain" hidden>
@@ -116,7 +134,7 @@ canvas{width:100%;height:220px;display:block}
 "use strict";
 const KEY = 'miyzal.v1';
 const DEFAULT_EX = ['Присідання зі штангою','Жим лежачи','Станова тяга','Румунська тяга','Жим стоячи (армійський)','Тяга штанги в нахилі','Підтягування','Віджимання на брусах','Тяга верхнього блоку','Тяга нижнього блоку сидячи','Жим гантелей на похилій лаві','Жим ногами','Випади з гантелями','Болгарські присідання','Розгинання ніг у тренажері','Згинання ніг у тренажері','Підйоми на носки','Махи гантелями в сторони','Тяга до обличчя (face pull)','Підйом штанги на біцепс','Молотки з гантелями','Французький жим','Розгинання рук на блоці','Планка','Скручування на блоці'];
-const TITLES = {workout:'Тренування',history:'Історія',progress:'Прогрес',weight:'Вага і талія',more:'Ще'};
+const TITLES = {workout:'Тренування',history:'Історія',progress:'Прогрес',weight:'Вага і талія',music:'Музика',more:'Ще'};
 
 let S, storageOk = true;
 const ui = {tab:'workout', wid:null, pex:null, metric:'e1rm', pmode:'groups', pg:null, pickG:'all', pendingEx:null};
@@ -134,6 +152,11 @@ function normalize(){
   if(!Array.isArray(S.waists)) S.waists = [];
   if(!S.photos || typeof S.photos !== 'object') S.photos = {};
   if(!S.groups || typeof S.groups !== 'object') S.groups = {};
+  if(!S.subs || typeof S.subs !== 'object') S.subs = JSON.parse(JSON.stringify(DEFAULT_SUBS));
+  Object.keys(DEFAULT_SUBS).forEach(k => { if(!Array.isArray(S.subs[k])) S.subs[k] = DEFAULT_SUBS[k].slice(); });
+  if(!Array.isArray(S.music)) S.music = [];
+  if(!Array.isArray(S.exercises)) S.exercises = DEFAULT_EX.slice();
+  if((S.defaultsV || 1) < 2){ NEW_DEFAULTS_V2.forEach(n => { if(!S.exercises.includes(n)) S.exercises.push(n); }); S.defaultsV = 2; }
   if(!Array.isArray(S.exercises)) S.exercises = DEFAULT_EX.slice();
   if(typeof S.goal !== 'number') S.goal = 85;
   if(!('lastBackup' in S)) S.lastBackup = null;
@@ -190,8 +213,10 @@ function render(){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === ui.tab));
   let h = '';
   if(!storageOk) h += `<div class="banner">⚠️ Браузер не дозволяє зберігати дані. Записи можуть зникнути після закриття — зроби резервну копію у вкладці «Ще».</div>`;
-  h += ({workout:vWorkout, history:vHistory, progress:vProgress, weight:vWeight, more:vMore})[ui.tab]();
+  h += ({workout:vWorkout, history:vHistory, progress:vProgress, weight:vWeight, music:vMusic, more:vMore})[ui.tab]();
   $('#view').innerHTML = h;
+  updateMini();
+  if(ui.tab === 'music') musicAfterRender();
   if(ui.tab === 'progress') drawProgress();
   if(ui.tab === 'weight') drawWeight();
 }
@@ -241,7 +266,7 @@ function vWorkoutEdit(w){
     const prev = lastSession(e.name, w);
     h += `<section class="card"><div class="exhead"><b>${esc(e.name)}</b>
       <span>${i>0?`<button class="ghost sm" data-act="exup" data-i="${i}" aria-label="Вгору">↑</button>`:''}<button class="ghost sm" data-act="exdel" data-i="${i}" aria-label="Видалити">✕</button></span></div>
-      <div class="muted small"><span class="gtag">${GNAME[groupOf(e.name)]}</span> ${prev ? `Минулого разу (${fmtShort(prev.date)}): ${prev.sets.map(fmtSet).join(', ')}` : 'Вперше — запиши стартову точку'}</div>
+      <div class="muted small"><span class="gtag" data-act="gedit" data-n="${esc(e.name)}">${esc(gLabel(e.name))}</span> ${prev ? `Минулого разу (${fmtShort(prev.date)}): ${prev.sets.map(fmtSet).join(', ')}` : 'Вперше — запиши стартову точку'}</div>
       ${eqRow(e, i)}
       <div class="sets"><div class="sethdr"><span></span><span>кг</span><span>повтори</span><span></span></div>
       ${e.sets.map((s,j) => `<div class="set"><span class="n">${j+1}</span>
@@ -503,11 +528,15 @@ function vMore(){
 
   <section class="card"><h2>🎯 Ціль ваги</h2><div class="row"><input class="grow" type="number" inputmode="decimal" step="0.5" data-in="goal" value="${S.goal}" style="margin:0"><span class="muted">кг</span></div></section>
 
+  <section class="card"><h2>💪 Групи і підгрупи</h2>
+    <div class="muted small">Натисни ✕ на підгрупі, щоб прибрати, або «+», щоб додати свою.</div>
+    ${GROUPS.filter(([k]) => k !== 'other').map(([k,v]) => `<div style="margin-top:10px"><b>${v}</b><div class="sublist">${(S.subs[k]||[]).map(sb => `<button class="chip" data-act="subdel" data-g="${k}" data-s="${esc(sb)}">${esc(sb)} ✕</button>`).join('')}<button class="chip addc" data-act="subadd" data-g="${k}">+</button></div></div>`).join('')}
+  </section>
+
   <section class="card"><h2>📋 Мої вправи</h2>
-    <input id="newEx" placeholder="Назва нової вправи" style="margin:0">
-    <div class="row" style="margin-top:8px">${groupSelect('chest','id="newExG" class="grow" style="margin:0;flex:1"')}<button class="pri" data-act="exnew">Додати</button></div>
-    <div class="muted small" style="margin-top:10px">Групу кожної вправи можна змінити тут:</div>
-    <ul class="list" style="margin-top:4px">${allExercises().sort((a,b)=>groupOf(a).localeCompare(groupOf(b)) || a.localeCompare(b,'uk')).map(n => `<li><span class="grow">${esc(n)}</span>${groupSelect(groupOf(n), `data-in="exg" data-n="${esc(n)}" style="width:auto;margin:0;padding:6px 8px;font-size:14px"`)}${custom.includes(n) ? `<button class="ghost sm" data-act="exremove" data-n="${esc(n)}" aria-label="Прибрати">✕</button>` : '<span style="width:38px"></span>'}</li>`).join('')}</ul>
+    <div class="row"><input class="grow" id="newEx" placeholder="Назва нової вправи" style="margin:0"><button class="pri" data-act="exnew">Додати</button></div>
+    <div class="muted small" style="margin-top:10px">Натисни на групу біля вправи, щоб змінити групу чи підгрупу:</div>
+    <ul class="list" style="margin-top:4px">${allExercises().sort((a,b)=>gLabel(a).localeCompare(gLabel(b),'uk') || a.localeCompare(b,'uk')).map(n => `<li><span class="grow">${esc(n)}</span><button class="chip" data-act="gedit" data-n="${esc(n)}" style="font-size:12px;padding:5px 9px">${esc(gLabel(n))}</button>${custom.includes(n) ? `<button class="ghost sm" data-act="exremove" data-n="${esc(n)}" aria-label="Прибрати">✕</button>` : ''}</li>`).join('')}</ul>
     <div class="muted small">Прибирання вправи зі списку не видаляє її з уже записаних тренувань.</div></section>
 
   <section class="card"><h2>ℹ️ Як не втратити дані</h2><div class="small muted">
@@ -538,78 +567,258 @@ function doImport(text){
   const d = obj && obj.data ? obj.data : obj;
   if(!d || !Array.isArray(d.workouts)){ alert('У файлі немає тренувань — перевір, що це копія з «Мій зал».'); return; }
   if(!confirm(`Відновити копію? Тренувань: ${d.workouts.length}, зважувань: ${(d.weights||[]).length}.\nПоточні дані на цьому пристрої буде замінено.`)) return;
-  S = d; normalize(); save(true); ui.wid = null; ui.tab = 'workout'; render(); toast('Дані відновлено');
+  const keepMusic = S.music; S = d; normalize(); S.music = keepMusic; save(true); ui.wid = null; ui.tab = 'workout'; render(); toast('Дані відновлено');
 }
 
-/* ---------- muscle groups ---------- */
-const GROUPS = [['chest','Груди'],['back','Спина'],['shoulders','Плечі'],['biceps','Біцепс'],['triceps','Трицепс'],['legs','Ноги'],['abs','Прес'],['other','Інше']];
+/* ---------- muscle groups & subgroups ---------- */
+const GROUPS = [['chest','Груди'],['back','Спина'],['shoulders','Плечі'],['biceps','Біцепс'],['triceps','Трицепс'],['forearms','Передпліччя'],['legs','Ноги'],['abs','Прес'],['other','Інше']];
 const GNAME = Object.fromEntries(GROUPS);
+const DEFAULT_SUBS = {chest:['Верх грудей','Середина грудей','Низ грудей'], back:['Широчайші','Середина спини','Трапеції','Поперек'], shoulders:['Передні дельти','Середні дельти','Задні дельти'], biceps:[], triceps:[], forearms:[], legs:['Квадрицепс','Біцепс стегна','Сідниці','Ікри'], abs:["Прямий м'яз","Косі м'язи"], other:[]};
 const DEFAULT_GROUPS = {
-  'Присідання зі штангою':'legs','Жим лежачи':'chest','Станова тяга':'back','Румунська тяга':'legs','Жим стоячи (армійський)':'shoulders',
-  'Тяга штанги в нахилі':'back','Підтягування':'back','Віджимання на брусах':'chest','Тяга верхнього блоку':'back','Тяга нижнього блоку сидячи':'back',
-  'Жим гантелей на похилій лаві':'chest','Жим ногами':'legs','Випади з гантелями':'legs','Болгарські присідання':'legs','Розгинання ніг у тренажері':'legs',
-  'Згинання ніг у тренажері':'legs','Підйоми на носки':'legs','Махи гантелями в сторони':'shoulders','Тяга до обличчя (face pull)':'shoulders',
-  'Підйом штанги на біцепс':'biceps','Молотки з гантелями':'biceps','Французький жим':'triceps','Розгинання рук на блоці':'triceps','Планка':'abs','Скручування на блоці':'abs'
+  'Присідання зі штангою':['legs','Квадрицепс'],'Жим лежачи':['chest','Середина грудей'],'Станова тяга':['back','Поперек'],'Румунська тяга':['legs','Біцепс стегна'],
+  'Жим стоячи (армійський)':['shoulders','Передні дельти'],'Тяга штанги в нахилі':['back','Середина спини'],'Підтягування':['back','Широчайші'],'Віджимання на брусах':['chest','Низ грудей'],
+  'Тяга верхнього блоку':['back','Широчайші'],'Тяга нижнього блоку сидячи':['back','Середина спини'],'Жим гантелей на похилій лаві':['chest','Верх грудей'],'Жим ногами':['legs','Квадрицепс'],
+  'Випади з гантелями':['legs','Квадрицепс'],'Болгарські присідання':['legs','Сідниці'],'Розгинання ніг у тренажері':['legs','Квадрицепс'],'Згинання ніг у тренажері':['legs','Біцепс стегна'],
+  'Підйоми на носки':['legs','Ікри'],'Махи гантелями в сторони':['shoulders','Середні дельти'],'Тяга до обличчя (face pull)':['shoulders','Задні дельти'],'Підйом штанги на біцепс':['biceps',null],
+  'Молотки з гантелями':['biceps',null],'Французький жим':['triceps',null],'Розгинання рук на блоці':['triceps',null],'Планка':['abs',null],'Скручування на блоці':['abs',"Прямий м'яз"],
+  'Шраги з гантелями':['back','Трапеції'],'Тяга гантелі однією рукою':['back','Широчайші'],'Пуловер на блоці':['back','Широчайші'],'Гіперекстензія':['back','Поперек'],
+  'Махи в нахилі':['shoulders','Задні дельти'],"Згинання зап'ясть зі штангою":['forearms',null],"Розгинання зап'ясть":['forearms',null],'Вис на турніку':['forearms',null],
+  'Прогулянка фермера':['forearms',null],'Ягодичний місток':['legs','Сідниці'],'Підйоми ніг у висі':['abs',"Прямий м'яз"]
 };
-function groupOf(n){ return S.groups[n] || DEFAULT_GROUPS[n] || guessGroup(n) || 'other'; }
-function guessGroup(n){
-  const s = n.toLowerCase();
-  const rules = [
-    ['triceps', /трицеп|француз|розгинання рук|брус.*трицеп|відведення.*назад/],
-    ['biceps', /біцеп|молот|згинання рук|scott|скотт/],
-    ['abs', /прес|скруч|планк|підйом ніг|ролик/],
-    ['shoulders', /плеч|мах|дельт|армійськ|жим стоячи|жим сидячи|арнольд|face pull|тяга до обличчя|шраг/],
-    ['chest', /груд|жим леж|жим гантел|похил|кросовер|зведення|пек|батерфля|віджим/],
-    ['back', /спин|тяга|підтяг|пулover|пуловер|гіперекст/],
-    ['legs', /ног|присід|випад|стегн|сідни|носк|литк|ікр|гак|сумо|ягод/]
-  ];
-  for(const [g, re] of rules) if(re.test(s)) return g;
-  return null;
+const NEW_DEFAULTS_V2 = ['Шраги з гантелями','Тяга гантелі однією рукою','Пуловер на блоці','Гіперекстензія','Махи в нахилі',"Згинання зап'ясть зі штангою","Розгинання зап'ясть",'Вис на турніку','Прогулянка фермера','Ягодичний місток','Підйоми ніг у висі'];
+const GUESS = [
+  ['forearms',null,/передпліч|зап'?.?яст|вис на|фермер/],['back','Трапеції',/шраг|трапец/],
+  ['shoulders','Задні дельти',/задн.*дельт|мах.*нахил|нахил.*мах|face pull|тяга до обличчя|реверс/],
+  ['legs','Біцепс стегна',/біцепс стегна|згинання ніг|румунськ|мертва/],['legs','Сідниці',/сідниц|ягод|місток|відведення ноги/],
+  ['legs','Ікри',/носк|литк|ікр/],['back','Поперек',/поперек|гіперекст|станов/],
+  ['triceps',null,/трицеп|француз|розгинання рук|розгинання на блоці/],['biceps',null,/біцеп|молот|згинання рук|скотт/],
+  ['abs',null,/прес|скруч|планк|підйом.? ніг|ролик/],['shoulders','Середні дельти',/мах/],
+  ['shoulders','Передні дельти',/армійськ|жим стоячи|жим сидячи|арнольд|плеч|дельт/],
+  ['chest','Верх грудей',/похил/],['chest',null,/груд|жим леж|кросовер|зведення|пек|батерфля|віджим/],
+  ['back','Широчайші',/широчай|підтяг|верхн.* блок|пуловер|однією рукою/],['back','Середина спини',/тяга|ромбо|середин|спин/],
+  ['legs','Квадрицепс',/присід|випад|жим ног|розгинання ніг|квадр|гак/],['legs',null,/ног|стегн/]
+];
+function guessGroup(n){ const s = n.toLowerCase(); for(const [g, sub, re] of GUESS) if(re.test(s)) return {g, sub}; return null; }
+function groupInfo(n){
+  const v = S.groups[n], d = DEFAULT_GROUPS[n];
+  if(v && typeof v === 'object') return {g: GNAME[v.g] ? v.g : 'other', sub: v.sub || null};
+  if(typeof v === 'string') return {g: GNAME[v] ? v : 'other', sub: d && d[0] === v ? d[1] : null};
+  if(d) return {g:d[0], sub:d[1]};
+  return guessGroup(n) || {g:'other', sub:null};
+}
+const groupOf = n => groupInfo(n).g;
+function gLabel(n){ const i = groupInfo(n); return GNAME[i.g] + (i.sub ? ' · ' + i.sub : ''); }
+function subsOf(g){
+  const list = (S.subs[g] || []).slice();
+  allExercises().forEach(n => { const i = groupInfo(n); if(i.g === g && i.sub && !list.includes(i.sub)) list.push(i.sub); });
+  return list;
 }
 function allExercises(){ return Array.from(new Set([...S.exercises, ...Object.keys(usageOrder())])); }
-function groupSelect(cur, attrs){
-  return `<select ${attrs}>${GROUPS.map(([k,v]) => `<option value="${k}" ${k===cur?'selected':''}>${v}</option>`).join('')}</select>`;
-}
 function weeklySets(){
-  const from = toTs(todayStr()) - 6*864e5, c = {};
-  GROUPS.forEach(([k]) => c[k] = 0);
-  S.workouts.forEach(w => { if(toTs(w.date) < from) return; w.exercises.forEach(e => { c[groupOf(e.name)] += e.sets.filter(validSet).length; }); });
-  return c;
+  const from = toTs(todayStr()) - 6*864e5, c = {}, cs = {};
+  GROUPS.forEach(([k]) => { c[k] = 0; cs[k] = {}; });
+  S.workouts.forEach(w => { if(toTs(w.date) < from) return; w.exercises.forEach(e => {
+    const i = groupInfo(e.name), n = e.sets.filter(validSet).length;
+    c[i.g] += n; const sk = i.sub || ''; cs[i.g][sk] = (cs[i.g][sk] || 0) + n;
+  }); });
+  return {c, cs};
 }
 function exLevel(n){
   const ss = exSessions(n); if(!ss.length) return null;
   const last = ss[ss.length-1], prev = ss[ss.length-2];
-  const bw = last.e1rm == null;
-  const key = bw ? 'reps' : 'e1rm';
+  const bw = last.e1rm == null, key = bw ? 'reps' : 'e1rm';
   const val = last[key], pv = prev ? prev[key] : null;
   const best = Math.max(...ss.map(s => s[key]).filter(v => v != null));
-  const top = last.sets.slice().sort((a,b) => bw ? b.r - a.r : e1rm(b) - e1rm(a))[0];
-  return {ss, last, bw, val, trend: pv == null ? 0 : val > pv * 1.005 ? 1 : val < pv * 0.995 ? -1 : 0, best, isPR: ss.length > 1 && val >= best, top};
+  return {ss, last, bw, val, trend: pv == null ? 0 : val > pv * 1.005 ? 1 : val < pv * 0.995 ? -1 : 0, best, isPR: ss.length > 1 && val >= best};
+}
+function barRow(label, n, mx, act){
+  const col = n === 0 ? 'var(--line)' : n < 10 ? 'var(--warn)' : n <= 20 ? 'var(--ok)' : 'var(--acc)';
+  return `<div class="gbar" ${act || ''}><span class="gl">${label}</span><span class="gt"><i style="width:${Math.max(n ? 4 : 0, n / mx * 100)}%;background:${col}"></i></span><b>${n}</b></div>`;
+}
+function exRow(n){
+  const L = exLevel(n);
+  if(!L) return `<div class="gex" data-act="gedit" data-n="${esc(n)}"><div class="grow"><b>${esc(n)}</b><div class="muted small">ще не робив</div></div><span class="muted">✎</span></div>`;
+  const arrow = L.trend > 0 ? '<span class="up">▲</span>' : L.trend < 0 ? '<span class="down">▼</span>' : '<span class="muted">●</span>';
+  return `<div class="gex" data-act="gopen" data-n="${esc(n)}"><div class="grow"><b>${esc(n)}</b>
+    <div class="muted small">${fmtShort(L.last.date)} · ${L.last.sets.map(fmtSet).join(', ')}</div></div>
+    <div class="lvl"><b>${L.bw ? L.val + ' повт.' : '≈' + fmtNum(L.val) + ' кг'} ${arrow}</b><span>${L.isPR ? '🏆 рекорд' : (L.bw ? 'рекорд ' + L.best : '1ПМ · рекорд ' + fmtNum(L.best))}</span></div></div>`;
 }
 function vGroups(){
-  const ws = weeklySets();
-  const main = GROUPS.filter(([k]) => k !== 'other' || ws.other > 0);
-  const mx = Math.max(20, ...Object.values(ws));
+  const {c, cs} = weeklySets();
+  const main = GROUPS.filter(([k]) => k !== 'other' || c.other > 0);
+  const mx = Math.max(20, ...Object.values(c));
   let h = `<section class="card"><h2>Баланс за 7 днів</h2>
-    ${main.map(([k,v]) => { const n = ws[k]; const col = n === 0 ? 'var(--line)' : n < 10 ? 'var(--warn)' : n <= 20 ? 'var(--ok)' : 'var(--acc)';
-      return `<div class="gbar" data-act="pg" data-g="${k}"><span class="gl">${v}</span><span class="gt"><i style="width:${Math.max(n ? 4 : 0, n / mx * 100)}%;background:${col}"></i></span><b>${n}</b></div>`; }).join('')}
-    <div class="muted small" style="margin-top:8px">Робочі підходи на групу за тиждень. Для росту м'язів орієнтир — приблизно <b style="color:var(--ok)">10–20</b>. <span style="color:var(--warn)">Жовте</span> — менше 10, варто додати.</div></section>`;
+    ${main.map(([k,v]) => barRow(v, c[k], mx, `data-act="pg" data-g="${k}"`)).join('')}
+    <div class="muted small" style="margin-top:8px">Робочі підходи на групу за тиждень. Орієнтир для росту — приблизно <b style="color:var(--ok)">10–20</b>. <span style="color:var(--warn)">Жовте</span> — менше 10. Натисни на групу — побачиш підгрупи.</div></section>`;
   const g = ui.pg || 'chest';
-  h += `<div class="chips">${GROUPS.map(([k,v]) => `<button class="chip ${k===g?'on':''}" data-act="pg" data-g="${k}">${v}</button>`).join('')}</div>`;
-  const list = allExercises().filter(n => groupOf(n) === g);
+  h += `<div class="chips" id="gchips">${GROUPS.map(([k,v]) => `<button class="chip ${k===g?'on':''}" data-act="pg" data-g="${k}">${v}</button>`).join('')}</div>`;
+  const subs = subsOf(g);
+  const ex = allExercises().filter(n => groupOf(n) === g);
   const last = usageOrder();
-  list.sort((a,b) => (last[b]||'').localeCompare(last[a]||'') || a.localeCompare(b,'uk'));
-  if(!list.length) return h + `<div class="empty">У групі «${GNAME[g]}» поки немає вправ.<br>Додай нову під час тренування або в «Ще → Мої вправи».</div>`;
-  h += `<section class="card">` + list.map(n => {
-    const L = exLevel(n);
-    if(!L) return `<div class="gex"><div class="grow"><b>${esc(n)}</b><div class="muted small">ще не робив</div></div></div>`;
-    const arrow = L.trend > 0 ? '<span class="up">▲</span>' : L.trend < 0 ? '<span class="down">▼</span>' : '<span class="muted">●</span>';
-    return `<div class="gex" data-act="gopen" data-n="${esc(n)}"><div class="grow"><b>${esc(n)}</b>
-      <div class="muted small">${fmtShort(L.last.date)} · ${L.last.sets.map(fmtSet).join(', ')}</div></div>
-      <div class="lvl"><b>${L.bw ? L.val + ' повт.' : '≈' + fmtNum(L.val) + ' кг'} ${arrow}</b><span>${L.isPR ? '🏆 рекорд' : (L.bw ? 'рекорд ' + L.best : '1ПМ · рекорд ' + fmtNum(L.best))}</span></div></div>`;
-  }).join('') + `</section>
-  <div class="muted small" style="padding:0 4px">▲/▼ — порівняння з попереднім тренуванням цієї вправи. «≈ кг» — розрахунковий максимум на 1 повтор: так можна порівнювати 80×8 і 85×5. Натисни на вправу — відкриється графік.</div>`;
+  ex.sort((a,b) => (last[b]||'').localeCompare(last[a]||'') || a.localeCompare(b,'uk'));
+  if(subs.length){
+    const smx = Math.max(10, ...subs.map(s => cs[g][s] || 0), cs[g][''] || 0);
+    h += `<section class="card"><h2>${GNAME[g]}: підгрупи за 7 днів</h2>
+      ${subs.map(s => barRow(esc(s), cs[g][s] || 0, smx)).join('')}${cs[g][''] ? barRow('Без підгрупи', cs[g][''], smx) : ''}</section>`;
+  }
+  const sections = subs.map(s => [s, ex.filter(n => groupInfo(n).sub === s)]);
+  const rest = ex.filter(n => !groupInfo(n).sub || !subs.includes(groupInfo(n).sub));
+  sections.forEach(([s, list]) => {
+    h += `<h3>${esc(s)}</h3>` + (list.length ? `<section class="card">${list.map(exRow).join('')}</section>` : `<div class="muted small" style="padding:0 4px 8px">Ще немає вправ — додай під час тренування й вибери цю підгрупу.</div>`);
+  });
+  if(rest.length) h += (subs.length ? `<h3>Без підгрупи</h3>` : '') + `<section class="card">${rest.map(exRow).join('')}</section>`;
+  if(!ex.length && !subs.length) h += `<div class="empty">У групі «${GNAME[g]}» поки немає вправ.</div>`;
+  h += `<button class="sec w100" data-act="subadd" data-g="${g}">+ Додати підгрупу в «${GNAME[g]}»</button>
+    <div class="muted small" style="padding:10px 4px">▲/▼ — порівняння з попереднім тренуванням цієї вправи. «≈ кг» — розрахунковий максимум на 1 повтор: так можна порівнювати 80×8 і 85×5. Натисни на вправу — відкриється графік.</div>`;
   return h;
+}
+/* editor: which group/subgroup an exercise belongs to */
+let geDraft = null;
+function openGE(n, opts){
+  const i = opts && opts.g ? {g:opts.g, sub:opts.sub || null} : groupInfo(n);
+  geDraft = {n, g:i.g, sub:i.sub, thenAdd: !!(opts && opts.thenAdd), isNewEx: !!(opts && opts.isNewEx)};
+  renderGE();
+}
+function renderGE(){
+  const d = geDraft, sh = $('#sheet');
+  const subs = subsOf(d.g);
+  sh.innerHTML = `<div class="panel"><div class="exhead"><b>${esc(d.n)}</b><button class="ghost" data-act="pclose">Закрити</button></div><div class="opts">
+    <div class="muted small" style="margin:4px 0 8px">Група м'язів</div>
+    <div class="chips wrap">${GROUPS.map(([k,v]) => `<button class="chip ${k===d.g?'on':''}" data-act="geg" data-g="${k}">${v}</button>`).join('')}</div>
+    <div class="muted small" style="margin:12px 0 8px">Підгрупа</div>
+    <div class="chips wrap"><button class="chip ${!d.sub?'on':''}" data-act="ges" data-s="">без підгрупи</button>${subs.map(s => `<button class="chip ${s===d.sub?'on':''}" data-act="ges" data-s="${esc(s)}">${esc(s)}</button>`).join('')}<button class="chip addc" data-act="gesnew">+ нова</button></div>
+    <button class="pri w100" style="margin-top:16px" data-act="gesave">${d.thenAdd ? 'Зберегти й додати в тренування' : 'Зберегти'}</button></div></div>`;
+  sh.classList.remove('hidden');
+}
+function askSub(g){
+  const s = (prompt(`Нова підгрупа в «${GNAME[g]}» (напр. «Широчайші», «Передпліччя — згиначі»):`) || '').trim();
+  if(!s) return null;
+  S.subs[g] = S.subs[g] || [];
+  if(!S.subs[g].includes(s)) S.subs[g].push(s);
+  save(true); return s;
+}
+function addToWorkout(n){
+  const w = S.workouts.find(x => x.id === ui.wid); if(!w) return;
+  if(!S.exercises.includes(n)) S.exercises.push(n);
+  const prev = lastSession(n, w), peq = lastEq(n, w);
+  const ne = {name:n, sets: prev ? prev.sets.map(s => ({w:s.w, r:null})) : [{w:null, r:null}]};
+  if(peq) ne.eq = {note: peq.note || '', photo: peq.photo || null};
+  w.exercises.push(ne);
+  save(true); closePicker(); render();
+  const cards = document.querySelectorAll('#view section.card'); const lastCard = cards[cards.length - 2];
+  if(lastCard) lastCard.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+/* ---------- music player (offline, IndexedDB) ---------- */
+const audio = $('#audio');
+const M = {idx:-1, url:null, shuffle:false, repeat:'all'};
+let mdb = null;
+function mdbOpen(){
+  return new Promise((res, rej) => {
+    if(mdb) return res(mdb);
+    if(!window.indexedDB) return rej(new Error('no idb'));
+    const r = indexedDB.open('miyzal-music', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('tracks');
+    r.onsuccess = () => { mdb = r.result; res(mdb); };
+    r.onerror = () => rej(r.error);
+  });
+}
+function mdbReq(mode, fn){
+  return mdbOpen().then(db => new Promise((res, rej) => {
+    const t = db.transaction('tracks', mode), rq = fn(t.objectStore('tracks')); let out;
+    if(rq) rq.onsuccess = () => { out = rq.result; };
+    t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('abort'));
+  }));
+}
+async function addTracks(files){
+  let ok = 0, fail = 0, quota = false;
+  toast('Додаю музику…');
+  for(const f of files){
+    try{
+      const buf = await f.arrayBuffer();
+      const blob = new Blob([buf], {type: f.type || 'audio/mpeg'});
+      const id = uid();
+      await mdbReq('readwrite', st => st.put(blob, id));
+      S.music.push({id, name: f.name.replace(/\.[^.]+$/, ''), size: f.size});
+      save(true); ok++;
+      if(ui.tab === 'music') render();
+    }catch(e){ fail++; if(e && /quota/i.test(e.name + e.message)){ quota = true; break; } }
+  }
+  toast(quota ? `Додано ${ok}. Закінчилось місце` : fail ? `Додано ${ok}, помилок: ${fail}` : `Додано треків: ${ok} 🎵`);
+  if(ui.tab === 'music') render();
+}
+async function playIdx(i){
+  if(i < 0 || i >= S.music.length) return;
+  M.idx = i; const t = S.music[i];
+  try{
+    const blob = await mdbReq('readonly', st => st.get(t.id));
+    if(!blob){ toast('Файл треку не знайдено'); return; }
+    if(M.url) URL.revokeObjectURL(M.url);
+    M.url = URL.createObjectURL(blob); audio.src = M.url;
+    await audio.play();
+  }catch(e){ if(!e || e.name !== 'AbortError') toast('Не вдалося відтворити цей файл'); }
+  mediaMeta(); playerUI();
+}
+function nextIdx(dir){
+  const n = S.music.length; if(!n) return -1;
+  if(M.shuffle && n > 1){ let j; do { j = Math.floor(Math.random() * n); } while(j === M.idx); return j; }
+  let j = M.idx + dir;
+  if(j >= n) j = M.repeat === 'off' && dir > 0 ? -1 : 0;
+  if(j < 0 && dir < 0) j = n - 1;
+  return j;
+}
+function mNext(){ const j = nextIdx(1); if(j >= 0) playIdx(j); }
+function mPrev(){ if(audio.currentTime > 3){ audio.currentTime = 0; return; } const j = nextIdx(-1); if(j >= 0) playIdx(j); }
+function mToggle(){
+  if(M.idx < 0 || !audio.src){ if(S.music.length) playIdx(M.shuffle ? Math.floor(Math.random() * S.music.length) : 0); return; }
+  if(audio.paused) audio.play().catch(() => {}); else audio.pause();
+}
+function fmtTime(t){ if(!isFinite(t)) return '0:00'; t = Math.floor(t); return Math.floor(t/60) + ':' + String(t % 60).padStart(2, '0'); }
+function mediaMeta(){
+  if(!('mediaSession' in navigator)) return; const t = S.music[M.idx];
+  try { navigator.mediaSession.metadata = new MediaMetadata({title: t ? t.name : '', artist: 'Мій зал', artwork: [{src:'icon-512.png', sizes:'512x512', type:'image/png'}]}); } catch(_){}
+}
+if('mediaSession' in navigator){
+  const ms = navigator.mediaSession;
+  [['play', () => audio.play()], ['pause', () => audio.pause()], ['nexttrack', mNext], ['previoustrack', mPrev], ['seekto', d => { if(d.seekTime != null) audio.currentTime = d.seekTime; }]]
+    .forEach(([a, f]) => { try { ms.setActionHandler(a, f); } catch(_){} });
+}
+audio.addEventListener('ended', () => {
+  if(M.repeat === 'one'){ audio.currentTime = 0; audio.play().catch(() => {}); return; }
+  const j = nextIdx(1); if(j >= 0) playIdx(j); else playerUI();
+});
+audio.addEventListener('play', () => playerUI());
+audio.addEventListener('pause', () => playerUI());
+audio.addEventListener('timeupdate', () => {
+  const s = $('#mseek'); if(s && !s._drag && isFinite(audio.duration)){ s.max = audio.duration; s.value = audio.currentTime; }
+  const c = $('#mcur'); if(c) c.textContent = fmtTime(audio.currentTime) + ' / ' + fmtTime(audio.duration);
+});
+function updateMini(){
+  const mini = $('#mini'), t = S.music[M.idx];
+  const show = !!t && ui.tab !== 'music';
+  mini.classList.toggle('hidden', !show); document.body.classList.toggle('has-mini', show);
+  if(t){ mini.querySelector('.mname').textContent = t.name; mini.querySelector('[data-act=mplay]').textContent = audio.paused ? '▶' : '⏸'; }
+}
+function playerUI(){ if(ui.tab === 'music') render(); else updateMini(); }
+function vMusic(){
+  const t = S.music[M.idx];
+  let h = `<section class="card"><div class="mnow">${t ? '🎵 ' + esc(t.name) : '<span class="muted">Нічого не грає</span>'}</div>
+    <input type="range" id="mseek" min="0" max="${isFinite(audio.duration) ? audio.duration : 0}" step="0.1" value="${audio.currentTime || 0}" ${t ? '' : 'disabled'}>
+    <div class="muted small" id="mcur" style="text-align:center">${fmtTime(audio.currentTime)} / ${fmtTime(audio.duration)}</div>
+    <div class="mctl"><button class="ghost mt ${M.shuffle ? 'onc' : ''}" data-act="mshuf" aria-label="Перемішати">🔀</button>
+      <button class="sec mt" data-act="mprev" aria-label="Попередній">⏮</button>
+      <button class="pri mbig" data-act="mplay" aria-label="Грати/пауза">${!t || audio.paused ? '▶' : '⏸'}</button>
+      <button class="sec mt" data-act="mnext" aria-label="Наступний">⏭</button>
+      <button class="ghost mt ${M.repeat !== 'off' ? 'onc' : ''}" data-act="mrep" aria-label="Повтор">${M.repeat === 'one' ? '🔂' : '🔁'}</button></div>
+    <div class="muted small" style="text-align:center">${M.shuffle ? 'Перемішування · ' : ''}${M.repeat === 'one' ? 'повтор треку' : M.repeat === 'all' ? 'повтор списку' : 'без повтору'}</div></section>
+    <button class="pri big" data-act="madd">+ Додати музику з телефону</button>`;
+  if(!S.music.length) h += `<div class="empty">Вибери MP3 чи інші аудіофайли з телефону — вони скопіюються всередину застосунку й гратимуть без інтернету, навіть із вимкненим екраном.</div>`;
+  else h += `<section class="card"><ul class="list">${S.music.map((m, i) => `<li class="${i === M.idx ? 'mcur' : ''}"><span class="grow" data-act="mpick" data-i="${i}" style="cursor:pointer">${i === M.idx ? (audio.paused ? '⏸ ' : '▶ ') : ''}${esc(m.name)}<br><span class="muted small">${(m.size / 1048576).toFixed(1)} МБ</span></span><button class="ghost sm" data-act="mdel" data-i="${i}" aria-label="Видалити">✕</button></li>`).join('')}</ul></section>`;
+  h += `<div class="muted small" style="padding:0 4px">Музика зберігається тільки на цьому телефоні й не входить у резервну копію. <span id="mstore"></span></div>`;
+  return h;
+}
+function musicAfterRender(){
+  try{ if(navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => { const el = $('#mstore'); if(el && e.usage != null) el.textContent = `Зайнято: ${(e.usage/1048576).toFixed(0)} МБ${e.quota ? ' з ~' + (e.quota/1073741824).toFixed(1) + ' ГБ доступних' : ''}.`; }).catch(() => {}); }catch(_){}
 }
 
 /* ---------- exercise picker ---------- */
@@ -632,7 +841,7 @@ function fillPicker(q){
   list.sort((a,b) => (last[b]||'').localeCompare(last[a]||'') || a.localeCompare(b,'uk'));
   let h = '';
   if(qq && !all.some(n => n.toLowerCase() === qq)) h += `<button class="opt add" data-act="pick" data-n="${esc(q.trim())}">+ Нова вправа: «${esc(q.trim())}»${g !== 'all' ? ' → ' + GNAME[g] : ''}</button>`;
-  h += list.map(n => `<button class="opt" data-act="pick" data-n="${esc(n)}">${esc(n)} <span class="muted small">· ${GNAME[groupOf(n)]}${inW.has(n) ? ' · вже додано' : ''}</span></button>`).join('');
+  h += list.map(n => `<button class="opt" data-act="pick" data-n="${esc(n)}">${esc(n)} <span class="muted small">· ${esc(gLabel(n))}${inW.has(n) ? ' · вже додано' : ''}</span></button>`).join('');
   $('#popts').innerHTML = h || '<div class="empty">Нічого не знайдено</div>';
 }
 function closePicker(){ eqDraft = null; const sh = $('#sheet'); sh.classList.add('hidden'); sh.innerHTML = ''; }
@@ -691,24 +900,48 @@ document.addEventListener('click', e => {
     case 'pclose': closePicker(); break;
     case 'pick': {
       const n = b.dataset.n; if(!w || !n) break;
-      const isNew = !allExercises().includes(n);
-      if(isNew && ui.pickG !== 'all') S.groups[n] = ui.pickG;
-      if(isNew && ui.pickG === 'all'){
-        const guess = guessGroup(n);
-        $('#popts').innerHTML = `<div style="padding:10px 4px"><b>${esc(n)}</b><div class="muted small" style="margin:4px 0 10px">На яку групу м'язів ця вправа?</div>
-          <div class="chips wrap">${GROUPS.map(([k,v]) => `<button class="chip ${k===guess?'on':''}" data-act="pickas" data-g="${k}" data-n="${esc(n)}">${v}</button>`).join('')}</div></div>`;
+      if(!allExercises().includes(n)){
+        const gs = guessGroup(n);
+        const g = ui.pickG !== 'all' ? ui.pickG : (gs ? gs.g : 'other');
+        openGE(n, {thenAdd:true, g, sub: gs && gs.g === g ? gs.sub : null});
         break;
       }
-      if(!S.exercises.includes(n)) S.exercises.push(n);
-      const prev = lastSession(n, w);
-      const peq = lastEq(n, w);
-      const ne = {name:n, sets: prev ? prev.sets.map(s => ({w:s.w, r:null})) : [{w:null, r:null}]};
-      if(peq) ne.eq = {note: peq.note || '', photo: peq.photo || null};
-      w.exercises.push(ne);
-      save(true); closePicker(); render();
-      const cards = document.querySelectorAll('#view section.card'); const lastCard = cards[cards.length - 2];
-      if(lastCard) lastCard.scrollIntoView({behavior:'smooth', block:'center'});
+      addToWorkout(n); break;
+    }
+    case 'gedit': openGE(b.dataset.n); break;
+    case 'geg': geDraft.g = b.dataset.g; geDraft.sub = null; renderGE(); break;
+    case 'ges': geDraft.sub = b.dataset.s || null; renderGE(); break;
+    case 'gesnew': { const s2 = askSub(geDraft.g); if(s2) geDraft.sub = s2; renderGE(); break; }
+    case 'gesave': {
+      const d = geDraft; S.groups[d.n] = {g:d.g, sub:d.sub};
+      if((d.isNewEx || d.thenAdd) && !S.exercises.includes(d.n)) S.exercises.push(d.n);
+      save(true);
+      if(d.thenAdd){ addToWorkout(d.n); } else { closePicker(); render(); toast('Збережено'); }
       break;
+    }
+    case 'subadd': { const s2 = askSub(b.dataset.g); if(s2){ render(); toast('Підгрупу додано'); } break; }
+    case 'subdel': {
+      const g = b.dataset.g, sb = b.dataset.s;
+      if(!confirm(`Видалити підгрупу «${sb}»? Вправи з неї залишаться в групі «${GNAME[g]}» без підгрупи.`)) break;
+      S.subs[g] = (S.subs[g] || []).filter(x => x !== sb);
+      allExercises().forEach(n => { const i = groupInfo(n); if(i.g === g && i.sub === sb) S.groups[n] = {g, sub:null}; });
+      save(true); render(); break;
+    }
+    case 'gomusic': ui.tab = 'music'; render(); window.scrollTo(0,0); break;
+    case 'mplay': mToggle(); break;
+    case 'mnext': mNext(); break;
+    case 'mprev': mPrev(); break;
+    case 'mpick': if(i === M.idx && audio.src) mToggle(); else playIdx(i); break;
+    case 'mshuf': M.shuffle = !M.shuffle; render(); break;
+    case 'mrep': M.repeat = M.repeat === 'all' ? 'one' : M.repeat === 'one' ? 'off' : 'all'; render(); break;
+    case 'madd': $('#musicFile').click(); break;
+    case 'mdel': {
+      const t = S.music[i]; if(!t || !confirm(`Видалити «${t.name}» з застосунку?`)) break;
+      mdbReq('readwrite', st => st.delete(t.id)).catch(() => {});
+      S.music.splice(i, 1);
+      if(i === M.idx){ audio.pause(); audio.removeAttribute('src'); audio.load(); if(M.url) URL.revokeObjectURL(M.url); M.url = null; M.idx = -1; }
+      else if(i < M.idx) M.idx--;
+      save(true); render(); break;
     }
     case 'exdel': if(w && confirm(`Прибрати «${w.exercises[i].name}» з тренування?`)){ w.exercises.splice(i,1); gcPhotos(); save(true); render(); } break;
     case 'exup': if(w && i > 0){ const t = w.exercises[i]; w.exercises[i] = w.exercises[i-1]; w.exercises[i-1] = t; save(true); render(); } break;
@@ -719,7 +952,6 @@ document.addEventListener('click', e => {
     case 'pg': ui.pg = b.dataset.g; ui.pmode = 'groups'; render(); { const c = document.querySelector('.chips'); if(c) c.scrollIntoView({block:'start'}); } break;
     case 'gopen': ui.pex = b.dataset.n; ui.pmode = 'ex'; ui.metric = 'e1rm'; render(); window.scrollTo(0,0); break;
     case 'pickg': ui.pickG = b.dataset.g; fillPicker($('#pq').value); break;
-    case 'pickas': { S.groups[b.dataset.n] = b.dataset.g; ui.pickG = b.dataset.g; const fake = document.createElement('button'); fake.dataset.act = 'pick'; fake.dataset.n = b.dataset.n; fake.style.display = 'none'; document.body.appendChild(fake); fake.click(); fake.remove(); break; }
     case 'wsave': {
       const kg = num($('#wKg').value), cm = num($('#wCm').value), d = $('#wDate').value || todayStr();
       const okKg = kg != null && kg >= 20 && kg <= 400, okCm = cm != null && cm >= 40 && cm <= 250;
@@ -745,9 +977,9 @@ document.addEventListener('click', e => {
     }
     case 'copytext': { const t = $('#bkText'); t.select(); let ok = false; try { ok = document.execCommand('copy'); } catch(_){} if(!ok && navigator.clipboard) navigator.clipboard.writeText(t.value).then(() => toast('Скопійовано'), () => toast('Виділи текст і скопіюй вручну')); else toast(ok ? 'Скопійовано' : 'Виділи текст і скопіюй вручну'); break; }
     case 'importtext': doImport($('#bkText').value); break;
-    case 'exnew': { const n = $('#newEx').value.trim(); if(n && !S.exercises.includes(n)){ S.exercises.push(n); S.groups[n] = $('#newExG').value; save(true); render(); toast('Додано'); } break; }
+    case 'exnew': { const n = $('#newEx').value.trim(); if(n && !allExercises().includes(n)){ const gs = guessGroup(n); openGE(n, {isNewEx:true, g: gs ? gs.g : 'other', sub: gs ? gs.sub : null}); } break; }
     case 'exremove': S.exercises = S.exercises.filter(x => x !== b.dataset.n); save(true); render(); break;
-    case 'wipe': if(confirm('Точно видалити ВСІ тренування, зважування, заміри і фото?') && confirm('Останнє попередження: це не можна скасувати. Видалити?')){ S = null; normalize(); save(true); ui.wid = null; render(); toast('Усе видалено'); } break;
+    case 'wipe': if(confirm('Точно видалити ВСІ тренування, зважування, заміри і фото?') && confirm('Останнє попередження: це не можна скасувати. Видалити?')){ const keepMusic = S.music; S = null; normalize(); S.music = keepMusic; save(true); ui.wid = null; render(); toast('Усе видалено'); } break;
   }
 });
 $('#sheet').addEventListener('click', e => { if(e.target.id === 'sheet') closePicker(); });
@@ -768,12 +1000,15 @@ document.addEventListener('change', e => {
   const w = S.workouts.find(x => x.id === ui.wid);
   if(k === 'wdate' && w && el.value){ w.date = el.value; save(true); render(); }
   if(k === 'pex'){ ui.pex = el.value; render(); }
-  if(k === 'exg'){ S.groups[el.dataset.n] = el.value; save(true); toast('Групу змінено'); }
+
 });
 $('#importFile').addEventListener('change', e => {
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader(); r.onload = () => doImport(String(r.result)); r.readAsText(f); e.target.value = '';
 });
+$('#musicFile').addEventListener('change', e => { const fs = Array.from(e.target.files || []); e.target.value = ''; if(fs.length) addTracks(fs); });
+document.addEventListener('input', e => { if(e.target.id === 'mseek'){ e.target._drag = true; audio.currentTime = +e.target.value; } });
+document.addEventListener('change', e => { if(e.target.id === 'mseek') e.target._drag = false; });
 $('#camFile').addEventListener('change', e => onPhotoPicked(e.target));
 $('#galFile').addEventListener('change', e => onPhotoPicked(e.target));
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if(ui.tab === 'progress') drawProgress(); if(ui.tab === 'weight') drawWeight(); }, 150); });
