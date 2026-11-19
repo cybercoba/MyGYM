@@ -74,6 +74,11 @@ canvas{width:100%;height:220px;display:block}
 .sheet .opt.add{color:var(--acc)}
 .toast{position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#2b3542;color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;z-index:30;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.4);opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
+.eq{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:6px 10px 6px 6px;margin-top:8px;cursor:pointer}
+.eq img{width:52px;height:52px;object-fit:cover;border-radius:8px;flex:none}
+.eq .eqi{width:32px;text-align:center;font-size:18px}
+.eqbtn{margin-top:6px;padding:6px 0;font-size:14px;color:var(--acc)}
+.eqbig{width:100%;max-height:45vh;object-fit:contain;border-radius:12px;background:#000;margin-bottom:10px}
 .empty{text-align:center;color:var(--mut);padding:30px 10px}
 </style>
 </head>
@@ -84,19 +89,21 @@ canvas{width:100%;height:220px;display:block}
   <button data-tab="workout" class="on"><span class="i">🏋️</span>Тренування</button>
   <button data-tab="history"><span class="i">📅</span>Історія</button>
   <button data-tab="progress"><span class="i">📈</span>Прогрес</button>
-  <button data-tab="weight"><span class="i">⚖️</span>Вага</button>
+  <button data-tab="weight"><span class="i">⚖️</span>Тіло</button>
   <button data-tab="more"><span class="i">⚙️</span>Ще</button>
 </nav>
 <div id="sheet" class="sheet hidden"></div>
 <div id="toast" class="toast"></div>
 <input type="file" id="importFile" accept=".json,application/json,text/plain" hidden>
+<input type="file" id="camFile" accept="image/*" capture="environment" hidden>
+<input type="file" id="galFile" accept="image/*" hidden>
 
 <script>
 (function(){
 "use strict";
 const KEY = 'miyzal.v1';
 const DEFAULT_EX = ['Присідання зі штангою','Жим лежачи','Станова тяга','Румунська тяга','Жим стоячи (армійський)','Тяга штанги в нахилі','Підтягування','Віджимання на брусах','Тяга верхнього блоку','Тяга нижнього блоку сидячи','Жим гантелей на похилій лаві','Жим ногами','Випади з гантелями','Болгарські присідання','Розгинання ніг у тренажері','Згинання ніг у тренажері','Підйоми на носки','Махи гантелями в сторони','Тяга до обличчя (face pull)','Підйом штанги на біцепс','Молотки з гантелями','Французький жим','Розгинання рук на блоці','Планка','Скручування на блоці'];
-const TITLES = {workout:'Тренування',history:'Історія',progress:'Прогрес',weight:'Вага тіла',more:'Ще'};
+const TITLES = {workout:'Тренування',history:'Історія',progress:'Прогрес',weight:'Вага і талія',more:'Ще'};
 
 let S, storageOk = true;
 const ui = {tab:'workout', wid:null, pex:null, metric:'e1rm'};
@@ -111,6 +118,8 @@ function normalize(){
   if(!S || typeof S !== 'object') S = {};
   if(!Array.isArray(S.workouts)) S.workouts = [];
   if(!Array.isArray(S.weights)) S.weights = [];
+  if(!Array.isArray(S.waists)) S.waists = [];
+  if(!S.photos || typeof S.photos !== 'object') S.photos = {};
   if(!Array.isArray(S.exercises)) S.exercises = DEFAULT_EX.slice();
   if(typeof S.goal !== 'number') S.goal = 85;
   if(!('lastBackup' in S)) S.lastBackup = null;
@@ -119,10 +128,10 @@ let saveT = null;
 function save(now){
   clearTimeout(saveT);
   const go = () => {
-    try { localStorage.setItem(KEY, JSON.stringify(S)); storageOk = true; }
-    catch(e){ storageOk = false; }
+    try { localStorage.setItem(KEY, JSON.stringify(S)); storageOk = true; return true; }
+    catch(e){ storageOk = false; return false; }
   };
-  if(now) go(); else saveT = setTimeout(go, 250);
+  if(now) return go(); saveT = setTimeout(go, 250); return true;
 }
 window.addEventListener('pagehide', () => save(true));
 document.addEventListener('visibilitychange', () => { if(document.hidden) save(true); });
@@ -184,7 +193,7 @@ function vWorkoutStart(){
   const sw = sortedWorkouts();
   const last = sw[sw.length-1];
   let h = '';
-  const hasData = S.workouts.length || S.weights.length;
+  const hasData = S.workouts.length || S.weights.length || S.waists.length;
   const days = S.lastBackup ? (Date.now() - S.lastBackup) / 864e5 : Infinity;
   if(hasData && days > 7) h += `<div class="banner">💾 ${S.lastBackup ? 'Остання резервна копія — ' + Math.floor(days) + ' дн. тому.' : 'Ти ще не робив резервну копію.'} Збережи, щоб не втратити записи.<br><button class="sec sm" data-act="export">Зберегти копію</button></div>`;
 
@@ -219,6 +228,7 @@ function vWorkoutEdit(w){
     h += `<section class="card"><div class="exhead"><b>${esc(e.name)}</b>
       <span>${i>0?`<button class="ghost sm" data-act="exup" data-i="${i}" aria-label="Вгору">↑</button>`:''}<button class="ghost sm" data-act="exdel" data-i="${i}" aria-label="Видалити">✕</button></span></div>
       <div class="muted small">${prev ? `Минулого разу (${fmtShort(prev.date)}): ${prev.sets.map(fmtSet).join(', ')}` : 'Вперше — запиши стартову точку'}</div>
+      ${eqRow(e, i)}
       <div class="sets"><div class="sethdr"><span></span><span>кг</span><span>повтори</span><span></span></div>
       ${e.sets.map((s,j) => `<div class="set"><span class="n">${j+1}</span>
         <input type="number" inputmode="decimal" step="0.5" min="0" placeholder="0" data-in="w" data-i="${i}" data-j="${j}" value="${s.w ?? ''}">
@@ -238,7 +248,7 @@ function sumText(w){
 }
 function newWorkout(date, from){
   const w = {id:uid(), date, created:Date.now(), note:'', exercises:[]};
-  if(from) w.exercises = from.exercises.map(e => ({name:e.name, sets:e.sets.filter(validSet).map(s => ({w:s.w, r:s.r}))}));
+  if(from) w.exercises = from.exercises.map(e => { const x = {name:e.name, sets:e.sets.filter(validSet).map(s => ({w:s.w, r:s.r}))}; if(e.eq) x.eq = {...e.eq}; return x; });
   w.exercises.forEach(e => { if(!e.sets.length) e.sets.push({w:null, r:null}); });
   S.workouts.push(w); save(true);
   ui.wid = w.id; render(); window.scrollTo(0,0);
@@ -274,7 +284,7 @@ function exSessions(name){
     const e = w.exercises.find(x => x.name === name); if(!e) return;
     const sets = e.sets.filter(validSet); if(!sets.length) return;
     const ws = sets.filter(s => s.w > 0);
-    out.push({date:w.date, sets,
+    out.push({date:w.date, sets, eq:e.eq,
       maxW: ws.length ? Math.max(...ws.map(s => s.w)) : null,
       e1rm: ws.length ? Math.max(...ws.map(e1rm)) : null,
       vol: sets.reduce((a,s) => a + (s.w||0)*s.r, 0),
@@ -309,7 +319,7 @@ function vProgress(){
     <div class="stat"><b>${ss.length}</b><span>тренувань</span></div></div>
     ${bestSet ? `<div class="muted small" style="margin-top:10px">Найважчий підхід: <b style="color:var(--txt)">${fmtSet(bestSet)}</b> (${fmtShort(bestSet.date)})</div>` : ''}
   </section><h3>Історія вправи</h3><section class="card"><ul class="list">
-    ${ss.slice().reverse().map(s => `<li><span>${fmtShort(s.date)}</span><span class="muted small" style="text-align:right">${s.sets.map(fmtSet).join(', ')}</span></li>`).join('')}
+    ${ss.slice().reverse().map(s => `<li><span>${fmtShort(s.date)}</span><span class="muted small" style="text-align:right">${s.sets.map(fmtSet).join(', ')}${s.eq && (s.eq.note || s.eq.photo) ? `<br>🏷 ${s.eq.note ? esc(s.eq.note) : 'фото'}` : ''}</span></li>`).join('')}
   </ul></section>`;
   return h;
 }
@@ -320,55 +330,155 @@ function drawProgress(){
   chart(cv, [{points:pts, color:'#4f9cff', dots:true, line:true}]);
 }
 
-/* ---------- weight ---------- */
+/* ---------- weight & waist ---------- */
 function weightsSorted(){ return S.weights.slice().sort((a,b) => a.date < b.date ? -1 : 1); }
+function waistsSorted(){ return S.waists.slice().sort((a,b) => a.date < b.date ? -1 : 1); }
 function avg7(ws, i){ const t = toTs(ws[i].date); const sub = ws.filter((w,k) => k <= i && toTs(w.date) > t - 7*864e5); return sub.reduce((a,w) => a + w.kg, 0) / sub.length; }
 function vWeight(){
   const t = todayStr();
-  const ws = weightsSorted();
-  const todayW = ws.find(w => w.date === t);
-  let h = `<section class="card"><h2>Записати вагу</h2><div class="row">
-    <label class="grow">Кг<input type="number" inputmode="decimal" step="0.1" min="20" id="wKg" placeholder="${ws.length ? fmtNum(ws[ws.length-1].kg) : '90'}" value="${todayW ? todayW.kg : ''}"></label>
-    <label class="grow">Дата<input type="date" id="wDate" value="${t}" max="${t}"></label></div>
+  const ws = weightsSorted(), zs = waistsSorted();
+  const tw = ws.find(w => w.date === t), tz = zs.find(z => z.date === t);
+  let h = `<section class="card"><h2>Записати</h2><div class="row">
+    <label class="grow">Вага, кг<input type="number" inputmode="decimal" step="0.1" min="20" id="wKg" placeholder="${ws.length ? fmtNum(ws[ws.length-1].kg) : '90'}" value="${tw ? tw.kg : ''}"></label>
+    <label class="grow">Талія, см<input type="number" inputmode="decimal" step="0.5" min="40" id="wCm" placeholder="${zs.length ? fmtNum(zs[zs.length-1].cm) : '95'}" value="${tz ? tz.cm : ''}"></label></div>
+    <label style="margin-top:8px">Дата<input type="date" id="wDate" value="${t}" max="${t}"></label>
     <button class="pri w100" style="margin-top:10px" data-act="wsave">Зберегти</button>
-    <div class="muted small" style="margin-top:8px">Порада: зважуйся зранку після туалету, до їжі. Дивись на середнє за 7 днів, а не на окремі дні.</div></section>`;
+    <div class="muted small" style="margin-top:8px">Можна заповнити щось одне. Вагу — щодня зранку до їжі. Талію — раз на тиждень: на рівні пупка, на спокійному видиху, не втягуючи живіт.</div></section>`;
   if(ws.length){
     const cur = ws[ws.length-1].kg, a = avg7(ws, ws.length-1);
     const ch = cur - ws[0].kg, left = a - S.goal;
-    const recent = ws.filter(w => toTs(w.date) > toTs(ws[ws.length-1].date) - 14*864e5);
     let rate = null;
     if(ws.length >= 4){
       const i2 = ws.length-1; const prevIdx = ws.findIndex(w => toTs(w.date) >= toTs(ws[i2].date) - 14*864e5);
       const span = (toTs(ws[i2].date) - toTs(ws[prevIdx].date)) / (7*864e5);
       if(span >= 1) rate = (avg7(ws, i2) - avg7(ws, prevIdx)) / span;
     }
-    h += `<section class="card"><div class="stats">
+    h += `<h3>⚖️ Вага</h3><section class="card"><div class="stats">
       <div class="stat"><b>${fmtNum(a)}</b><span>сер. 7 днів</span></div>
       <div class="stat"><b class="${ch<0?'up':ch>0?'down':''}">${ch>0?'+':''}${fmtNum(ch)}</b><span>з початку</span></div>
       <div class="stat"><b>${left > 0 ? fmtNum(left) : '🎯'}</b><span>${left > 0 ? 'до цілі ' + fmtNum(S.goal) : 'ціль досягнута'}</span></div></div>
       ${rate != null ? `<div class="muted small" style="margin-top:10px">Темп за останні 2 тижні: <b style="color:var(--txt)">${rate>0?'+':''}${fmtNum(rate)} кг/тиж</b>${rate < -1 ? ' — швидкувато, можна з\'їсти трохи більше' : rate <= -0.2 ? ' — 👍 гарний темп' : rate < 0.1 ? ' — стоїть: спробуй мінус 100–200 ккал' : ''}${left > 0 && rate < -0.05 ? ` · до цілі ≈ ${Math.ceil(left / -rate)} тиж.` : ''}</div>` : ''}
       <canvas id="wchart" style="margin-top:10px"></canvas>
       <div class="muted small" style="margin-top:4px"><span style="color:#8b96a5">●</span> зважування <span style="color:#3ecf8e;margin-left:8px">━</span> середнє 7 днів <span style="color:#f5b84a;margin-left:8px">┅</span> ціль</div>
-    </section><h3>Записи</h3><section class="card"><ul class="list">
-      ${ws.slice().reverse().slice(0,60).map(w => `<li><span>${fmtLong(w.date)}</span><span><b>${fmtNum(w.kg)}</b> кг <button class="ghost sm" data-act="wtdel" data-d="${w.date}" aria-label="Видалити">✕</button></span></li>`).join('')}
+    </section>`;
+  }
+  if(zs.length){
+    const zc = zs[zs.length-1].cm, zch = zc - zs[0].cm;
+    h += `<h3>📏 Талія</h3><section class="card"><div class="stats">
+      <div class="stat"><b>${fmtNum(zc)}</b><span>зараз, см</span></div>
+      <div class="stat"><b class="${zch<0?'up':zch>0?'down':''}">${zch>0?'+':''}${fmtNum(zch)}</b><span>з початку</span></div>
+      <div class="stat"><b>${zs.length}</b><span>замірів</span></div></div>
+      <canvas id="zchart" style="margin-top:10px;height:180px"></canvas>
+      <div class="muted small" style="margin-top:6px">Якщо вага стоїть, а талія зменшується — жир іде, а м'язи ростуть. Це і є рекомпозиція.</div>
+    </section>`;
+  }
+  const dates = Array.from(new Set([...ws.map(w => w.date), ...zs.map(z => z.date)])).sort().reverse();
+  if(dates.length){
+    const wm = Object.fromEntries(ws.map(w => [w.date, w.kg])), zm = Object.fromEntries(zs.map(z => [z.date, z.cm]));
+    h += `<h3>Записи</h3><section class="card"><ul class="list">
+      ${dates.slice(0,90).map(d => `<li><span>${fmtLong(d)}</span><span>${wm[d] != null ? `<b>${fmtNum(wm[d])}</b> кг` : ''}${wm[d] != null && zm[d] != null ? ' · ' : ''}${zm[d] != null ? `<b>${fmtNum(zm[d])}</b> см` : ''} <button class="ghost sm" data-act="wtdel" data-d="${d}" aria-label="Видалити">✕</button></span></li>`).join('')}
     </ul></section>`;
   }
   return h;
 }
 function drawWeight(){
-  const cv = $('#wchart'); if(!cv) return;
-  const ws = weightsSorted();
-  chart(cv, [
-    {points: ws.map(w => ({x:toTs(w.date), y:w.kg})), color:'#8b96a5', dots:true, line:false},
-    {points: ws.map((w,i) => ({x:toTs(w.date), y:avg7(ws,i)})), color:'#3ecf8e', dots:false, line:true}
-  ], {goal:S.goal});
+  const cv = $('#wchart');
+  if(cv){
+    const ws = weightsSorted();
+    chart(cv, [
+      {points: ws.map(w => ({x:toTs(w.date), y:w.kg})), color:'#8b96a5', dots:true, line:false},
+      {points: ws.map((w,i) => ({x:toTs(w.date), y:avg7(ws,i)})), color:'#3ecf8e', dots:false, line:true}
+    ], {goal:S.goal});
+  }
+  const zv = $('#zchart');
+  if(zv) chart(zv, [{points: waistsSorted().map(z => ({x:toTs(z.date), y:z.cm})), color:'#c58bff', dots:true, line:true}]);
+}
+
+/* ---------- equipment (photo / description) ---------- */
+let eqDraft = null;
+function lastEq(name, cur){
+  const ws = sortedWorkouts().reverse();
+  for(const w of ws){
+    if(cur && (w.id === cur.id || w.date > cur.date)) continue;
+    const e = w.exercises.find(x => x.name === name);
+    if(e && e.eq && (e.eq.note || e.eq.photo)) return e.eq;
+  }
+  return null;
+}
+function eqRow(e, i){
+  const eq = e.eq || {}; const ph = eq.photo && S.photos[eq.photo];
+  if(!eq.note && !ph) return `<button class="ghost sm eqbtn" data-act="eqedit" data-i="${i}">📷 Фото / опис снаряда</button>`;
+  return `<div class="eq" data-act="eqedit" data-i="${i}">${ph ? `<img src="${ph}" alt="">` : '<span class="eqi">🏷</span>'}<div class="grow small">${eq.note ? esc(eq.note) : '<span class="muted">фото снаряда</span>'}</div><span class="muted">✎</span></div>`;
+}
+function gcPhotos(){
+  const used = new Set();
+  S.workouts.forEach(w => w.exercises.forEach(e => { if(e.eq && e.eq.photo) used.add(e.eq.photo); }));
+  Object.keys(S.photos).forEach(k => { if(!used.has(k)) delete S.photos[k]; });
+}
+function openEq(i){
+  const w = S.workouts.find(x => x.id === ui.wid); if(!w) return;
+  const e = w.exercises[i], eq = e.eq || {};
+  eqDraft = {i, note: eq.note || '', photo: eq.photo && S.photos[eq.photo] ? eq.photo : null, newData: null};
+  renderEq();
+}
+function renderEq(){
+  const w = S.workouts.find(x => x.id === ui.wid); if(!w || !eqDraft) return;
+  const e = w.exercises[eqDraft.i];
+  const src = eqDraft.newData || (eqDraft.photo && S.photos[eqDraft.photo]);
+  const sh = $('#sheet');
+  sh.innerHTML = `<div class="panel"><div class="exhead"><b>${esc(e.name)}</b><button class="ghost" data-act="pclose">Закрити</button></div>
+    <div class="opts">
+    <div class="muted small">З чим ти робиш цю вправу? Наступного разу опис і фото підтягнуться самі — достатньо глянути й узяти те саме.</div>
+    <label class="block">Опис<textarea id="eqNote" rows="3" placeholder="Напр.: синя гантель без цифр (≈12 кг), 3-тя зліва на стійці. Або: тренажер біля вікна, сидіння на 4">${esc(eqDraft.note)}</textarea></label>
+    ${src ? `<img class="eqbig" src="${src}" alt="Фото снаряда">` : ''}
+    <div class="row"><button class="sec grow" data-act="eqcam">📷 Камера</button><button class="sec grow" data-act="eqgal">🖼 Галерея</button>${src ? '<button class="danger" data-act="eqrm">Прибрати фото</button>' : ''}</div>
+    <button class="pri w100" style="margin-top:12px" data-act="eqsave">Зберегти</button></div></div>`;
+  sh.classList.remove('hidden');
+}
+function compressImage(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const M = 720; let w = img.naturalWidth, h = img.naturalHeight; const k = Math.min(1, M / Math.max(w, h));
+      w = Math.round(w*k); h = Math.round(h*k);
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h); URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', 0.6));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('img')); };
+    img.src = url;
+  });
+}
+function onPhotoPicked(input){
+  const f = input.files && input.files[0]; input.value = '';
+  if(!f || !eqDraft) return;
+  const ta = $('#eqNote'); if(ta) eqDraft.note = ta.value;
+  compressImage(f).then(d => { eqDraft.newData = d; renderEq(); }, () => toast('Не вдалося відкрити фото'));
+}
+function saveEq(){
+  const w = S.workouts.find(x => x.id === ui.wid); if(!w || !eqDraft) return;
+  const e = w.exercises[eqDraft.i];
+  const old = e.eq ? {...e.eq} : null;
+  const note = ($('#eqNote').value || '').trim();
+  let pid = eqDraft.photo, newPid = null;
+  if(eqDraft.newData){ newPid = pid = uid(); S.photos[pid] = eqDraft.newData; }
+  if(note || pid) e.eq = {note, photo: pid || null}; else delete e.eq;
+  gcPhotos();
+  if(!save(true)){
+    if(newPid) delete S.photos[newPid];
+    if(old) e.eq = old; else delete e.eq;
+    save(true);
+    toast('Не вистачає пам\'яті для фото — збережи опис текстом');
+    return;
+  }
+  closePicker(); render(); toast('Збережено');
 }
 
 /* ---------- more ---------- */
 function vMore(){
   const custom = S.exercises;
   return `<section class="card"><h2>💾 Резервна копія</h2>
-    <div class="muted small">${S.lastBackup ? 'Остання: ' + new Date(S.lastBackup).toLocaleString('uk-UA',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}) : 'Ще не робилась'} · тренувань: ${S.workouts.length}, зважувань: ${S.weights.length}</div>
+    <div class="muted small">${S.lastBackup ? 'Остання: ' + new Date(S.lastBackup).toLocaleString('uk-UA',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}) : 'Ще не робилась'} · тренувань: ${S.workouts.length}, зважувань: ${S.weights.length}, замірів талії: ${S.waists.length}, фото: ${Object.keys(S.photos).length}</div>
     <div class="row" style="margin-top:10px"><button class="pri grow" data-act="export">Зберегти у файл</button><button class="sec grow" data-act="import">Відновити з файлу</button></div>
     <div class="row" style="margin-top:8px"><button class="ghost grow" data-act="showtext">Копія як текст (якщо файл не зберігається)</button></div>
     <div id="textBox"></div></section>
@@ -432,7 +542,7 @@ function fillPicker(q){
   h += list.map(n => `<button class="opt" data-act="pick" data-n="${esc(n)}">${esc(n)}${inW.has(n) ? ' <span class="muted small">· вже додано</span>' : last[n] ? ' <span class="muted small">· нещодавно</span>' : ''}</button>`).join('');
   $('#popts').innerHTML = h || '<div class="empty">Нічого не знайдено</div>';
 }
-function closePicker(){ const sh = $('#sheet'); sh.classList.add('hidden'); sh.innerHTML = ''; }
+function closePicker(){ eqDraft = null; const sh = $('#sheet'); sh.classList.add('hidden'); sh.innerHTML = ''; }
 
 /* ---------- chart ---------- */
 function chart(cv, series, o){
@@ -481,32 +591,43 @@ document.addEventListener('click', e => {
     case 'wcopy': { const src = S.workouts.find(x => x.id === b.dataset.id); const d = ($('#newDate') && $('#newDate').value) || todayStr(); newWorkout(d, src); toast('Скопійовано — онови цифри'); break; }
     case 'wopen': ui.wid = b.dataset.id; ui.tab = 'workout'; render(); window.scrollTo(0,0); break;
     case 'wclose':
-      if(w && !w.exercises.length && !w.note){ S.workouts = S.workouts.filter(x => x.id !== w.id); }
+      if(w && !w.exercises.length && !w.note){ S.workouts = S.workouts.filter(x => x.id !== w.id); gcPhotos(); }
       save(true); ui.wid = null; render(); window.scrollTo(0,0); toast('Збережено 💪'); break;
-    case 'wdel': if(confirm('Видалити це тренування?')){ S.workouts = S.workouts.filter(x => x.id !== b.dataset.id); save(true); ui.wid = null; render(); } break;
+    case 'wdel': if(confirm('Видалити це тренування?')){ S.workouts = S.workouts.filter(x => x.id !== b.dataset.id); gcPhotos(); save(true); ui.wid = null; render(); } break;
     case 'exadd': openPicker(); break;
     case 'pclose': closePicker(); break;
     case 'pick': {
       const n = b.dataset.n; if(!w || !n) break;
       if(!S.exercises.includes(n)) S.exercises.push(n);
       const prev = lastSession(n, w);
-      w.exercises.push({name:n, sets: prev ? prev.sets.map(s => ({w:s.w, r:null})) : [{w:null, r:null}]});
+      const peq = lastEq(n, w);
+      const ne = {name:n, sets: prev ? prev.sets.map(s => ({w:s.w, r:null})) : [{w:null, r:null}]};
+      if(peq) ne.eq = {note: peq.note || '', photo: peq.photo || null};
+      w.exercises.push(ne);
       save(true); closePicker(); render();
       const cards = document.querySelectorAll('#view section.card'); const lastCard = cards[cards.length - 2];
       if(lastCard) lastCard.scrollIntoView({behavior:'smooth', block:'center'});
       break;
     }
-    case 'exdel': if(w && confirm(`Прибрати «${w.exercises[i].name}» з тренування?`)){ w.exercises.splice(i,1); save(true); render(); } break;
+    case 'exdel': if(w && confirm(`Прибрати «${w.exercises[i].name}» з тренування?`)){ w.exercises.splice(i,1); gcPhotos(); save(true); render(); } break;
     case 'exup': if(w && i > 0){ const t = w.exercises[i]; w.exercises[i] = w.exercises[i-1]; w.exercises[i-1] = t; save(true); render(); } break;
     case 'setadd': if(w){ const ss = w.exercises[i].sets, l = ss[ss.length-1]; ss.push(l ? {w:l.w, r:l.r} : {w:null, r:null}); save(true); render(); const inp = document.querySelector(`input[data-in="r"][data-i="${i}"][data-j="${ss.length-1}"]`); if(inp){ inp.focus(); inp.select && inp.select(); } } break;
     case 'setdel': if(w){ w.exercises[i].sets.splice(j,1); if(!w.exercises[i].sets.length) w.exercises[i].sets.push({w:null,r:null}); save(true); render(); } break;
     case 'metric': ui.metric = b.dataset.m; render(); break;
     case 'wsave': {
-      const kg = num($('#wKg').value), d = $('#wDate').value || todayStr();
-      if(kg == null || kg < 20 || kg > 400){ toast('Введи вагу в кг'); break; }
-      S.weights = S.weights.filter(x => x.date !== d); S.weights.push({date:d, kg}); save(true); render(); toast('Записано'); break;
+      const kg = num($('#wKg').value), cm = num($('#wCm').value), d = $('#wDate').value || todayStr();
+      const okKg = kg != null && kg >= 20 && kg <= 400, okCm = cm != null && cm >= 40 && cm <= 250;
+      if(!okKg && !okCm){ toast('Введи вагу (кг) або талію (см)'); break; }
+      if(okKg){ S.weights = S.weights.filter(x => x.date !== d); S.weights.push({date:d, kg}); }
+      if(okCm){ S.waists = S.waists.filter(x => x.date !== d); S.waists.push({date:d, cm}); }
+      save(true); render(); toast('Записано'); break;
     }
-    case 'wtdel': if(confirm('Видалити цей запис?')){ S.weights = S.weights.filter(x => x.date !== b.dataset.d); save(true); render(); } break;
+    case 'wtdel': if(confirm('Видалити записи за цей день?')){ S.weights = S.weights.filter(x => x.date !== b.dataset.d); S.waists = S.waists.filter(x => x.date !== b.dataset.d); save(true); render(); } break;
+    case 'eqedit': openEq(i); break;
+    case 'eqcam': $('#camFile').click(); break;
+    case 'eqgal': $('#galFile').click(); break;
+    case 'eqrm': { const ta = $('#eqNote'); if(ta) eqDraft.note = ta.value; eqDraft.photo = null; eqDraft.newData = null; renderEq(); break; }
+    case 'eqsave': saveEq(); break;
     case 'export': doExport(); break;
     case 'import': $('#importFile').click(); break;
     case 'showtext': {
@@ -520,7 +641,7 @@ document.addEventListener('click', e => {
     case 'importtext': doImport($('#bkText').value); break;
     case 'exnew': { const n = $('#newEx').value.trim(); if(n && !S.exercises.includes(n)){ S.exercises.push(n); save(true); render(); toast('Додано'); } break; }
     case 'exremove': S.exercises = S.exercises.filter(x => x !== b.dataset.n); save(true); render(); break;
-    case 'wipe': if(confirm('Точно видалити ВСІ тренування і зважування?') && confirm('Останнє попередження: це не можна скасувати. Видалити?')){ S = null; normalize(); save(true); ui.wid = null; render(); toast('Усе видалено'); } break;
+    case 'wipe': if(confirm('Точно видалити ВСІ тренування, зважування, заміри і фото?') && confirm('Останнє попередження: це не можна скасувати. Видалити?')){ S = null; normalize(); save(true); ui.wid = null; render(); toast('Усе видалено'); } break;
   }
 });
 $('#sheet').addEventListener('click', e => { if(e.target.id === 'sheet') closePicker(); });
@@ -546,6 +667,8 @@ $('#importFile').addEventListener('change', e => {
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader(); r.onload = () => doImport(String(r.result)); r.readAsText(f); e.target.value = '';
 });
+$('#camFile').addEventListener('change', e => onPhotoPicked(e.target));
+$('#galFile').addEventListener('change', e => onPhotoPicked(e.target));
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if(ui.tab === 'progress') drawProgress(); if(ui.tab === 'weight') drawWeight(); }, 150); });
 
 load(); render();
